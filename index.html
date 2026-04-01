@@ -1,99 +1,489 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
-    <meta charset="utf-8">
-    <title>주군을 위한 3D 캐릭터 구현</title>
-    <style>
-        body { margin: 0; overflow: hidden; }
-    </style>
-</head>
-<body>
-    <script type="module">
-        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-        import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
-
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color( 0xe0e0e0 );
-        scene.fog = new THREE.Fog( 0xe0e0e0, 20, 100 );
-
-        const camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.25, 100 );
-        camera.position.set( -5, 3, 10 );
-        camera.lookAt( 0, 2, 0 );
-
-        const renderer = new THREE.WebGLRenderer( { antialias: true } );
-        renderer.setPixelRatio( window.devicePixelRatio );
-        renderer.setSize( window.innerWidth, window.innerHeight );
-        document.body.appendChild( renderer.domElement );
-
-        const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x8d8d8d, 3 );
-        hemiLight.position.set( 0, 20, 0 );
-        scene.add( hemiLight );
-
-        const dirLight = new THREE.DirectionalLight( 0xffffff, 3 );
-        dirLight.position.set( 0, 20, 10 );
-        scene.add( dirLight );
-
-        const mesh = new THREE.Mesh( 
-            new THREE.PlaneGeometry( 100, 100 ), 
-            new THREE.MeshPhongMaterial( { color: 0xcbcbcb, depthWrite: false } ) 
-        );
-        mesh.rotation.x = - Math.PI / 2;
-        scene.add( mesh );
-
-        let mixer, clock;
-        clock = new THREE.Clock();
-
-        const loader = new GLTFLoader();
-        // 주군 반드시 아래 경로를 실제 모델 파일(RobotExpressive.glb)이 위치한 곳으로 수정하셔야 합니다
-        loader.load( 'https://threejs.org/examples/#webgl_animation_skinning_morph', function ( gltf ) {
-
-            const model = gltf.scene;
-            scene.add( model );
-
-            mixer = new THREE.AnimationMixer( model );
-
-            // 상태(states): running 애니메이션 실행
-            const runClip = gltf.animations.find(clip => clip.name === 'Running');
-            if (runClip) {
-                const runAction = mixer.clipAction( runClip );
-                runAction.play();
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lucky: 통합 운세 가이드</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Three.js ImportMap -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
             }
-
-            // 감정(emotes): wave 애니메이션 동시 실행
-            const waveClip = gltf.animations.find(clip => clip.name === 'Wave');
-            if (waveClip) {
-                const waveAction = mixer.clipAction( waveClip );
-                waveAction.play();
-            }
-
-            // 표정(expression): sad 0.6 모프 타겟(Morph Target) 적용
-            model.traverse( function ( child ) {
-                if ( child.isMesh && child.morphTargetDictionary ) {
-                    const sadIndex = child.morphTargetDictionary[ 'Sad' ];
-                    if ( sadIndex !== undefined ) {
-                        child.morphTargetInfluences[ sadIndex ] = 0.6;
-                    }
-                }
-            } );
-
-            animate();
-
-        }, undefined, function ( e ) {
-            console.error( e );
-        } );
-
-        function animate() {
-            requestAnimationFrame( animate );
-            const dt = clock.getDelta();
-            if ( mixer ) mixer.update( dt );
-            renderer.render( scene, camera );
         }
-
-        window.addEventListener( 'resize', function () {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize( window.innerWidth, window.innerHeight );
-        } );
     </script>
+</head>
+
+<body>
+    <div id="background-pattern"></div>
+
+    <div id="app-container">
+        <!-- Navigation / Header -->
+        <header class="bauhaus-header">
+            <div class="logo" id="header-logo" style="cursor: pointer;">
+                <div class="logo-geo">
+                    <div class="lg-circle"></div>
+                    <div class="lg-square"></div>
+                    <div class="lg-triangle"></div>
+                </div>
+                LUCKY be Happy
+            </div>
+            <nav style="display: flex; gap: 8px;">
+                <button id="nav-menu" class="btn-icon" aria-label="메뉴 열기">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                        stroke-linecap="butt" stroke-linejoin="miter">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+                <button id="nav-profile" class="btn-icon" aria-label="마이페이지(수정/설정)">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                        stroke-linecap="butt" stroke-linejoin="miter">
+                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                    </svg>
+                </button>
+            </nav>
+        </header>
+
+        <!-- Main Content Area -->
+        <main id="main-content">
+            <!-- View: Start/Onboarding (Unified Home) -->
+            <section id="view-onboarding" class="view active">
+                <div class="hero">
+                    <h1 class="title-massive">완벽히 개인화된<br>당신만의 운세 가이드</h1>
+                    <p class="sub-text">사주, 별자리, 성향을 통합하여 가장 정확한 길을 제시합니다.</p>
+                </div>
+
+                <div class="onboarding-grid">
+                    <!-- Profile List Area (Order 1 on mobile) -->
+                    <div class="bauhaus-card profile-list-area">
+                        <div class="deco-circle" style="background-color: var(--bh-yellow); right: 20px; top: 20px;">
+                        </div>
+                        <h2>저장된 프로필 목록</h2>
+                        <p class="sub-text mb-4">운세를 확인할 프로필을 선택하거나 새로 추가하세요.</p>
+
+                        <div id="profile-list-container" class="profile-grid">
+                            <!-- Injected by UI.js -->
+                        </div>
+
+                        <button id="btn-add-new-profile" class="btn btn-outline w-full mt-4">
+                            + 폼 초기화 후 새 프로필 작성
+                        </button>
+                    </div>
+
+                    <!-- Input Form Area -->
+                    <div class="bauhaus-card form-container">
+                        <div class="deco-circle"></div>
+                        <h2>기본 정보 입력</h2>
+                        <form id="profile-form">
+                            <div class="input-group">
+                                <label for="name">이름</label>
+                                <input type="text" id="name" required placeholder="홍길동">
+                            </div>
+
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="birth-type">양/음력</label>
+                                    <select id="birth-type">
+                                        <option value="solar">양력</option>
+                                        <option value="lunar">음력</option>
+                                    </select>
+                                </div>
+                                <div class="input-group">
+                                    <label>생년월일</label>
+                                    <div class="date-input-wrapper">
+                                        <input type="number" id="birth-year" class="date-part" min="1900" max="2100"
+                                            placeholder="YYYY" required>
+                                        <span class="date-sep">/</span>
+                                        <input type="number" id="birth-month" class="date-part" min="1" max="12"
+                                            placeholder="MM" required>
+                                        <span class="date-sep">/</span>
+                                        <input type="number" id="birth-day" class="date-part" min="1" max="31"
+                                            placeholder="DD" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="birth-time">태어난 시간</label>
+                                    <select id="birth-time">
+                                        <option value="unknown">모름</option>
+                                        <option value="ja">자시 (23:30 ~ 01:29)</option>
+                                        <option value="chuk">축시 (01:30 ~ 03:29)</option>
+                                        <option value="in">인시 (03:30 ~ 05:29)</option>
+                                        <option value="myo">묘시 (05:30 ~ 07:29)</option>
+                                        <option value="jin">진시 (07:30 ~ 09:29)</option>
+                                        <option value="sa">사시 (09:30 ~ 11:29)</option>
+                                        <option value="o">오시 (11:30 ~ 13:29)</option>
+                                        <option value="mi">미시 (13:30 ~ 15:29)</option>
+                                        <option value="shin">신시 (15:30 ~ 17:29)</option>
+                                        <option value="yu">유시 (17:30 ~ 19:29)</option>
+                                        <option value="sul">술시 (19:30 ~ 21:29)</option>
+                                        <option value="hae">해시 (21:30 ~ 23:29)</option>
+                                    </select>
+                                </div>
+                                <div class="input-group">
+                                    <label for="blood-type">혈액형</label>
+                                    <select id="blood-type">
+                                        <option value="A">A형</option>
+                                        <option value="B">B형</option>
+                                        <option value="O">O형</option>
+                                        <option value="AB">AB형</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="input-group mbti-group">
+                                <label for="mbti">MBTI</label>
+                                <div class="mbti-input-wrapper">
+                                    <select id="mbti">
+                                        <option value="">모름 / 선택</option>
+                                        <option value="ISTJ">ISTJ</option>
+                                        <option value="ISFJ">ISFJ</option>
+                                        <option value="INFJ">INFJ</option>
+                                        <option value="INTJ">INTJ</option>
+                                        <option value="ISTP">ISTP</option>
+                                        <option value="ISFP">ISFP</option>
+                                        <option value="INFP">INFP</option>
+                                        <option value="INTP">INTP</option>
+                                        <option value="ESTP">ESTP</option>
+                                        <option value="ESFP">ESFP</option>
+                                        <option value="ENFP">ENFP</option>
+                                        <option value="ENTP">ENTP</option>
+                                        <option value="ESTJ">ESTJ</option>
+                                        <option value="ESFJ">ESFJ</option>
+                                        <option value="ENFJ">ENFJ</option>
+                                        <option value="ENTJ">ENTJ</option>
+                                    </select>
+                                    <button type="button" id="btn-mbti-test" class="btn btn-blue">약식 테스트</button>
+                                    <a href="https://www.16personalities.com/ko/" target="_blank" id="btn-mbti-formal"
+                                        class="btn btn-outline"
+                                        style="white-space: nowrap; text-decoration: none; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">정식
+                                        테스트</a>
+                                </div>
+                            </div>
+
+                            <div class="action-buttons-wrapper">
+                                <button type="button" id="btn-save-only" class="btn btn-yellow">프로필 저장</button>
+                                <button type="submit" class="btn btn-red w-full">나만의 운세 분석하기</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <div id="toast-message" class="toast hidden">저장되었습니다!</div>
+
+            <!-- View: Dashboard -->
+            <section id="view-dashboard" class="view hidden">
+                <div class="dashboard-header" style="text-align: center;">
+                    <p style="font-size: 1.1rem; font-weight: 600; color: var(--stark-black); margin-bottom: 8px;"><span
+                            id="user-name-display" class="highlight" style="display:inline-block;">O</span>님의 오늘 하루는,
+                    </p>
+                    <h2 id="idiom-title"
+                        style="color: var(--bh-red); font-size: 2.2rem; letter-spacing: 2px; margin-bottom: 6px;">분석 중
+                    </h2>
+                    <p id="idiom-desc"
+                        style="font-size: 1.05rem; color: var(--stark-black); font-weight: 500; margin-bottom: 12px; opacity: 0.8;">
+                    </p>
+                    <p id="date-display" class="sub-text">2026년 3월 27일의 통합 운세</p>
+                </div>
+
+                <div class="dashboard-grid">
+                    <!-- Top Row: Score & Biorhythm -->
+                    <div class="dashboard-top-row col-span-2">
+                        <!-- Overall Score Area -->
+                        <div class="bauhaus-card chart-card flex-1">
+                            <div class="deco-square"></div>
+                            <div class="score-circle">
+                                <svg viewBox="0 0 36 36" class="circular-chart">
+                                    <path class="circle-bg"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <path class="circle" id="score-path" stroke-dasharray="0, 100"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <text x="18" y="20.85" class="percentage" id="score-text">0</text>
+                                </svg>
+                            </div>
+                            <div class="score-info">
+                                <h3>오늘의 종합 운세 지수</h3>
+                                <p id="synthesis-summary" class="synthesis-text sub-text">분석 중...</p>
+                            </div>
+                        </div>
+
+                        <!-- Biorhythm Card -->
+                        <div class="bauhaus-card status-card flex-1" style="min-width: 320px;">
+                            <h3>신체 / 감성 / 지성 리듬</h3>
+                            <div class="biorhythm-bars">
+                                <div class="bar-group">
+                                    <span>신체</span>
+                                    <div class="progress-bar">
+                                        <div id="bio-physical" class="progress-fill physical" style="width: 0%"></div>
+                                    </div>
+                                    <span id="bio-physical-text" class="bio-comment sub-text"></span>
+                                </div>
+                                <div class="bar-group">
+                                    <span>감성</span>
+                                    <div class="progress-bar">
+                                        <div id="bio-emotional" class="progress-fill emotional" style="width: 0%"></div>
+                                    </div>
+                                    <span id="bio-emotional-text" class="bio-comment sub-text"></span>
+                                </div>
+                                <div class="bar-group">
+                                    <span>지성</span>
+                                    <div class="progress-bar">
+                                        <div id="bio-intellectual" class="progress-fill intellectual" style="width: 0%">
+                                        </div>
+                                    </div>
+                                    <span id="bio-intellectual-text" class="bio-comment sub-text"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Zodiac & Saju Synthesis -->
+                    <div class="bauhaus-card insight-card col-span-2">
+                        <div class="deco-triangle" style="border-bottom-color: var(--bh-red)"></div>
+                        <h3>성향 최적화 상세 조언</h3>
+                        <div class="insight-content">
+                            <div class="advice-categories">
+                                <div class="cat-item">
+                                    <h4 class="cat-title">🌟 종합운</h4>
+                                    <p id="adv-overall">분석 중...</p>
+                                </div>
+                                <div class="cat-item">
+                                    <h4 class="cat-title">💕 애정운</h4>
+                                    <p id="adv-love">분석 중...</p>
+                                </div>
+                                <div class="cat-item">
+                                    <h4 class="cat-title">💰 금전운</h4>
+                                    <p id="adv-wealth">분석 중...</p>
+                                </div>
+                                <div class="cat-item">
+                                    <h4 id="career-title" class="cat-title">💼 직장/사업운</h4>
+                                    <p id="adv-career">분석 중...</p>
+                                </div>
+                                <div class="cat-item">
+                                    <h4 class="cat-title">💪 건강운</h4>
+                                    <p id="adv-health">분석 중...</p>
+                                </div>
+                            </div>
+
+                            <!-- Tags side box -->
+                            <div class="tags-sidebar">
+                                <h4 style="margin-bottom: 12px;">개인 성향 정보</h4>
+                                <div class="tags-box-inner mb-4">
+                                    <span id="tag-zodiac" class="badge">별자리</span>
+                                    <span id="tag-mbti" class="badge">MBTI</span>
+                                    <span id="tag-blood" class="badge">혈액형</span>
+                                </div>
+
+                                <!-- 3D Avatar Container -->
+                                <div id="avatar-container"
+                                    style="width: 100%; height: 300px; background-color: var(--stark-white); border-radius: 8px; border: 2px solid var(--stark-black); overflow: hidden; position: relative;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Nav Actions -->
+                    <div id="dash-normal-actions" class="dashboard-actions col-span-2">
+                        <button id="btn-go-onboarding" class="btn btn-outline w-full mb-4">다른 프로필 선택 / 홈으로 가기</button>
+                        <button id="btn-view-history" class="btn btn-yellow w-full">이전 운세 누적 기록 보기</button>
+                    </div>
+
+                    <div id="dash-history-actions" class="dashboard-actions col-span-2 hidden">
+                        <button id="btn-return-today" class="btn btn-blue w-full mt-4">오늘의 운세로 복귀하기</button>
+                    </div>
+
+                    <!-- Push Notification Prompt -->
+                    <div class="bauhaus-card col-span-2 push-promo-card" id="push-promo"
+                        style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+                        <div class="promo-text" style="flex: 1; min-width: 200px;">
+                            <h3 style="margin-bottom: 4px;">매일 아침 운세를 받아보세요</h3>
+                            <p style="margin: 0;" class="sub-text">지정한 시간에 알림을 통해 오늘 하루를 준비하는 전략을 알려드립니다.</p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <input type="time" id="dash-push-time" value="08:00"
+                                style="padding: 10px; border: 2px solid var(--stark-black); border-radius: 8px; font-family: inherit; font-size: 1rem; flex: 1; min-width: 120px;">
+                            <button id="btn-enable-push" class="btn" style="white-space: nowrap;">알림 설정하기</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- View: Profile / Settings (Editable) -->
+            <section id="view-profile" class="view hidden">
+                <div class="bauhaus-card form-container">
+                    <div class="deco-square" style="background-color: var(--bh-blue);"></div>
+                    <h2 id="edit-page-title">프로필 정보 수정 및 설정</h2>
+                    <form id="edit-profile-form">
+                        <input type="hidden" id="edit-original-name">
+                        <div class="input-group">
+                            <label for="edit-name">이름</label>
+                            <input type="text" id="edit-name" required>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="edit-birth-type">양/음력</label>
+                                <select id="edit-birth-type">
+                                    <option value="solar">양력</option>
+                                    <option value="lunar">음력</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>생년월일</label>
+                                <div class="date-input-wrapper">
+                                    <input type="number" id="edit-birth-year" class="date-part" min="1900" max="2100"
+                                        placeholder="YYYY" required>
+                                    <span class="date-sep">/</span>
+                                    <input type="number" id="edit-birth-month" class="date-part" min="1" max="12"
+                                        placeholder="MM" required>
+                                    <span class="date-sep">/</span>
+                                    <input type="number" id="edit-birth-day" class="date-part" min="1" max="31"
+                                        placeholder="DD" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="edit-birth-time">태어난 시간</label>
+                                <select id="edit-birth-time">
+                                    <option value="unknown">모름</option>
+                                    <option value="ja">자시 (23:30 ~ 01:29)</option>
+                                    <option value="chuk">축시 (01:30 ~ 03:29)</option>
+                                    <option value="in">인시 (03:30 ~ 05:29)</option>
+                                    <option value="myo">묘시 (05:30 ~ 07:29)</option>
+                                    <option value="jin">진시 (07:30 ~ 09:29)</option>
+                                    <option value="sa">사시 (09:30 ~ 11:29)</option>
+                                    <option value="o">오시 (11:30 ~ 13:29)</option>
+                                    <option value="mi">미시 (13:30 ~ 15:29)</option>
+                                    <option value="shin">신시 (15:30 ~ 17:29)</option>
+                                    <option value="yu">유시 (17:30 ~ 19:29)</option>
+                                    <option value="sul">술시 (19:30 ~ 21:29)</option>
+                                    <option value="hae">해시 (21:30 ~ 23:29)</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="edit-blood-type">혈액형</label>
+                                <select id="edit-blood-type">
+                                    <option value="A">A형</option>
+                                    <option value="B">B형</option>
+                                    <option value="O">O형</option>
+                                    <option value="AB">AB형</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="input-group mbti-group">
+                            <label for="edit-mbti">MBTI</label>
+                            <div class="mbti-input-wrapper">
+                                <select id="edit-mbti">
+                                    <option value="">모름 / 선택</option>
+                                    <option value="ISTJ">ISTJ</option>
+                                    <option value="ISFJ">ISFJ</option>
+                                    <option value="INFJ">INFJ</option>
+                                    <option value="INTJ">INTJ</option>
+                                    <option value="ISTP">ISTP</option>
+                                    <option value="ISFP">ISFP</option>
+                                    <option value="INFP">INFP</option>
+                                    <option value="INTP">INTP</option>
+                                    <option value="ESTP">ESTP</option>
+                                    <option value="ESFP">ESFP</option>
+                                    <option value="ENFP">ENFP</option>
+                                    <option value="ENTP">ENTP</option>
+                                    <option value="ESTJ">ESTJ</option>
+                                    <option value="ESFJ">ESFJ</option>
+                                    <option value="ENFJ">ENFJ</option>
+                                    <option value="ENTJ">ENTJ</option>
+                                </select>
+                                <button type="button" id="btn-edit-mbti-test" class="btn btn-blue">약식 테스트</button>
+                                <a href="https://www.16personalities.com/ko/무료-성격-유형-검사" target="_blank"
+                                    id="btn-edit-mbti-formal" class="btn btn-outline"
+                                    style="white-space: nowrap; text-decoration: none; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">정식
+                                    테스트</a>
+                            </div>
+                        </div>
+
+                        <hr style="border: var(--border-thin) solid var(--stark-black); margin: 24px 0;">
+
+                        <h3>알림 설정</h3>
+                        <div class="input-row mt-4 align-center"
+                            style="align-items: center; gap: 12px; margin-bottom: 16px;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="push-enabled">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="sub-text">일일 접속 알림 활성화</span>
+                        </div>
+
+                        <div class="input-group" id="push-time-group">
+                            <label for="push-time">매일 알림 받을 시간</label>
+                            <input type="time" id="push-time" value="08:00">
+                        </div>
+
+                        <div class="input-row mt-4">
+                            <button type="submit" id="btn-save-settings" class="btn btn-blue w-full">저장하기</button>
+                            <button type="button" id="btn-delete-profile" class="btn btn-red w-full">프로필 삭제</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- View: History -->
+            <section id="view-history" class="view hidden">
+                <div class="bauhaus-card">
+                    <h2>운세 누적 기록</h2>
+                    <p class="sub-text mb-4">지금까지 조회한 일자별 운세가 저장됩니다. 상세한 기록을 보려면 카드를 클릭하세요.</p>
+
+                    <div class="history-tabs mt-4 mb-4">
+                        <button id="tab-history-all" class="btn btn-text active-tab"
+                            style="padding-bottom: 4px; border-bottom: 3px solid var(--stark-black);">전체 운세 기록</button>
+                        <button id="tab-history-profile" class="btn btn-text text-muted"
+                            style="padding-bottom: 4px; border-bottom: 3px solid transparent; opacity: 0.6;">내 프로필
+                            기록</button>
+                    </div>
+
+                    <div id="history-list" class="history-list">
+                        <!-- History items injected here -->
+                    </div>
+
+                    <button id="btn-history-back" class="btn btn-yellow w-full mt-4">대시보드로 돌아가기</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Modals -->
+        <div id="mbti-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>간단 MBTI 성향 테스트</h2>
+                <div id="mbti-questions">
+                    <!-- Questions will be injected here via JS -->
+                </div>
+                <div class="modal-actions mt-4 text-center">
+                    <button id="btn-close-mbti" class="btn btn-outline">취소</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="js/store.js"></script>
+    <script type="module" src="js/engine.js"></script>
+    <script type="module" src="js/push.js"></script>
+    <script type="module" src="js/ui.js"></script>
+    <script type="module" src="js/app.js"></script>
 </body>
+
 </html>
