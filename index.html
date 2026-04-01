@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>주군을 위한 3D 캐릭터 구현</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+    </style>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+        import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color( 0xe0e0e0 );
+        scene.fog = new THREE.Fog( 0xe0e0e0, 20, 100 );
+
+        const camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.25, 100 );
+        camera.position.set( -5, 3, 10 );
+        camera.lookAt( 0, 2, 0 );
+
+        const renderer = new THREE.WebGLRenderer( { antialias: true } );
+        renderer.setPixelRatio( window.devicePixelRatio );
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        document.body.appendChild( renderer.domElement );
+
+        const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x8d8d8d, 3 );
+        hemiLight.position.set( 0, 20, 0 );
+        scene.add( hemiLight );
+
+        const dirLight = new THREE.DirectionalLight( 0xffffff, 3 );
+        dirLight.position.set( 0, 20, 10 );
+        scene.add( dirLight );
+
+        const mesh = new THREE.Mesh( 
+            new THREE.PlaneGeometry( 100, 100 ), 
+            new THREE.MeshPhongMaterial( { color: 0xcbcbcb, depthWrite: false } ) 
+        );
+        mesh.rotation.x = - Math.PI / 2;
+        scene.add( mesh );
+
+        let mixer, clock;
+        clock = new THREE.Clock();
+
+        const loader = new GLTFLoader();
+        // 주군 반드시 아래 경로를 실제 모델 파일(RobotExpressive.glb)이 위치한 곳으로 수정하셔야 합니다
+        loader.load( 'https://threejs.org/examples/#webgl_animation_skinning_morph', function ( gltf ) {
+
+            const model = gltf.scene;
+            scene.add( model );
+
+            mixer = new THREE.AnimationMixer( model );
+
+            // 상태(states): running 애니메이션 실행
+            const runClip = gltf.animations.find(clip => clip.name === 'Running');
+            if (runClip) {
+                const runAction = mixer.clipAction( runClip );
+                runAction.play();
+            }
+
+            // 감정(emotes): wave 애니메이션 동시 실행
+            const waveClip = gltf.animations.find(clip => clip.name === 'Wave');
+            if (waveClip) {
+                const waveAction = mixer.clipAction( waveClip );
+                waveAction.play();
+            }
+
+            // 표정(expression): sad 0.6 모프 타겟(Morph Target) 적용
+            model.traverse( function ( child ) {
+                if ( child.isMesh && child.morphTargetDictionary ) {
+                    const sadIndex = child.morphTargetDictionary[ 'Sad' ];
+                    if ( sadIndex !== undefined ) {
+                        child.morphTargetInfluences[ sadIndex ] = 0.6;
+                    }
+                }
+            } );
+
+            animate();
+
+        }, undefined, function ( e ) {
+            console.error( e );
+        } );
+
+        function animate() {
+            requestAnimationFrame( animate );
+            const dt = clock.getDelta();
+            if ( mixer ) mixer.update( dt );
+            renderer.render( scene, camera );
+        }
+
+        window.addEventListener( 'resize', function () {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize( window.innerWidth, window.innerHeight );
+        } );
+    </script>
+</body>
+</html>
